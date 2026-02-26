@@ -30,5 +30,8 @@ dev = [
     "pytest-asyncio>=0.23",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["engine_starter"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
