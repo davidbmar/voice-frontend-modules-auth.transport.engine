@@ -106,18 +106,13 @@ class WebRTCSession:
         log.info("SDP answer created")
         return self._pc.localDescription.sdp
 
-    async def speak(self, text: str, tts) -> float:
-        """Synthesize and play audio. Returns duration in seconds.
-
-        Args:
-            text: Text to speak.
-            tts: Any object with a synthesize(text, voice) method (sync or async).
-        """
+    async def _enqueue_tts(self, text: str, tts, voice: str = "") -> int:
+        """Synthesize sentences and enqueue for playback. Returns total bytes."""
         self._audio_source.set_generator(self._tts_generator)
-        text = self._clean_for_speech(text)
-        sentences = self._split_sentences(text)
+        cleaned = self._clean_for_speech(text)
+        sentences = self._split_sentences(cleaned)
         if not sentences:
-            return 0.0
+            return 0
 
         log.info("TTS: %d sentences to synthesize", len(sentences))
         loop = asyncio.get_running_loop()
@@ -125,74 +120,90 @@ class WebRTCSession:
 
         for sentence in sentences:
             if asyncio.iscoroutinefunction(getattr(tts, 'synthesize', None)):
-                pcm = await tts.synthesize(sentence)
+                pcm = await tts.synthesize(sentence, voice)
             else:
-                pcm = await loop.run_in_executor(None, tts.synthesize, sentence)
+                pcm = await loop.run_in_executor(None, tts.synthesize, sentence, voice)
             if pcm:
                 self._audio_queue.enqueue(pcm)
                 total_bytes += len(pcm)
 
+        return total_bytes
+
+    async def speak(self, text: str, tts, voice: str = "") -> float:
+        """Synthesize and play audio. Returns duration in seconds.
+
+        Args:
+            text: Text to speak.
+            tts: Any object with synthesize(text, voice) -> bytes (sync or async).
+            voice: Voice ID to pass to the TTS provider.
+        """
+        total_bytes = await self._enqueue_tts(text, tts, voice)
+        if total_bytes == 0:
+            return 0.0
         duration = total_bytes / (SAMPLE_RATE * 2)
         log.info("TTS total: %d bytes, %.1fs playback", total_bytes, duration)
         return duration
 
     @staticmethod
     def _compute_rms(pcm_bytes: bytes) -> float:
-        """Compute RMS energy of int16 PCM audio."""
+        """Compute RMS energy of int16 PCM audio.
+
+        Args:
+            pcm_bytes: Raw int16 mono PCM bytes.
+
+        Returns:
+            RMS amplitude (0.0 for silence, up to 32767.0 for max).
+        """
         if not pcm_bytes:
             return 0.0
         samples = np.frombuffer(pcm_bytes, dtype=np.int16)
         return float(np.sqrt(np.mean(samples.astype(np.float64) ** 2)))
 
     async def speak_with_barge_in(
-        self, text: str, tts, stt=None
+        self, text: str, tts, voice: str = "", stt=None
     ) -> tuple[float, str | None]:
         """Speak with barge-in detection — stops playback if user interrupts.
 
-        Returns (duration_played, transcribed_text | None).
-        If barge-in is disabled, behaves like regular speak().
+        Enqueues all TTS audio, then monitors the mic for speech energy.
+        If consecutive frames exceed barge_in_energy_threshold, playback is
+        stopped immediately. Optionally transcribes the captured interruption.
+
+        Args:
+            text: Text to speak.
+            tts: Any object with synthesize(text, voice) -> bytes (sync or async).
+            voice: Voice ID to pass to the TTS provider.
+            stt: Optional STT provider to transcribe barge-in speech.
+
+        Returns:
+            (duration_played, transcribed_text | None).
+            If playback completes without interruption, transcribed_text is None.
         """
         if not self.barge_in_enabled:
-            dur = await self.speak(text, tts)
+            dur = await self.speak(text, tts, voice)
             return dur, None
 
-        # Enqueue all TTS audio (reuses speak() logic)
-        self._audio_source.set_generator(self._tts_generator)
-        cleaned = self._clean_for_speech(text)
-        sentences = self._split_sentences(cleaned)
-        if not sentences:
-            return 0.0, None
-
-        loop = asyncio.get_running_loop()
-        total_bytes = 0
-        for sentence in sentences:
-            if asyncio.iscoroutinefunction(getattr(tts, 'synthesize', None)):
-                pcm = await tts.synthesize(sentence)
-            else:
-                pcm = await loop.run_in_executor(None, tts.synthesize, sentence)
-            if pcm:
-                self._audio_queue.enqueue(pcm)
-                total_bytes += len(pcm)
-
+        total_bytes = await self._enqueue_tts(text, tts, voice)
         if total_bytes == 0:
             return 0.0, None
 
         total_duration = total_bytes / (SAMPLE_RATE * 2)
         log.info("Barge-in TTS: %d bytes, %.1fs playback", total_bytes, total_duration)
 
-        # Enable recording and clear mic buffer for fresh barge-in detection
+        # Safely reset mic buffer: disable recording, clear, then re-enable
+        self._recording = False
         self._mic_frames.clear()
         self._recording = True
+
         consecutive_speech = 0
         interrupted = False
         elapsed = 0.0
         poll_interval = 0.1
+        loop = asyncio.get_running_loop()
 
         while self._audio_queue.is_playing:
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
 
-            # Check recent mic frames for speech energy
             recent = self._mic_frames[-5:] if len(self._mic_frames) >= 5 else self._mic_frames
             if recent:
                 pcm_data = b"".join(recent)

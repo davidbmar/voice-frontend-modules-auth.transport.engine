@@ -1,5 +1,7 @@
 """Tests for barge-in detection in transport session."""
 
+import inspect
+
 import numpy as np
 import pytest
 
@@ -43,12 +45,18 @@ class TestAudioQueueIsPlaying:
 
 
 class TestBargeInAttributes:
-    def test_session_has_barge_in_attrs(self):
-        """Verify barge-in attributes exist (no real WebRTC needed)."""
+    def test_compute_rms_is_static(self):
+        """Verify _compute_rms exists and is callable."""
         from transport.session import WebRTCSession
         assert hasattr(WebRTCSession, '_compute_rms')
         assert callable(WebRTCSession._compute_rms)
 
-    def test_session_has_speak_with_barge_in(self):
+    def test_speak_with_barge_in_signature(self):
+        """Verify speak_with_barge_in has the expected parameters."""
         from transport.session import WebRTCSession
-        assert hasattr(WebRTCSession, 'speak_with_barge_in')
+        sig = inspect.signature(WebRTCSession.speak_with_barge_in)
+        params = set(sig.parameters.keys()) - {"self"}
+        assert "text" in params
+        assert "tts" in params
+        assert "voice" in params
+        assert "stt" in params
