@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice App + Admin</title>
+    <style>
+        body { font-family: system-ui; max-width: 400px; margin: 40px auto; text-align: center; }
+        button { padding: 16px 32px; font-size: 18px; cursor: pointer; border-radius: 8px; border: none; background: #4CAF50; color: white; }
+        button:disabled { opacity: 0.5; }
+        button.hangup { background: #f44336; }
+        #status { margin: 20px 0; color: #666; }
+        .admin-link { display: inline-block; margin-top: 24px; color: #666; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <h1>Voice App</h1>
+    <p id="status">Connecting...</p>
+    <button id="call-btn" disabled>Call</button>
+    <br>
+    <a href="/admin" class="admin-link">Admin Panel</a>
+    <script type="module">
+        import { VoiceWebRTCClient } from '/js/voice-webrtc-client.js';
+
+        const client = new VoiceWebRTCClient({ signalingUrl: '/ws' });
+        const btn = document.getElementById('call-btn');
+        const status = document.getElementById('status');
+
+        client.on('ready', () => { status.textContent = 'Ready'; btn.disabled = false; });
+        client.on('connected', () => { status.textContent = 'In call'; });
+        client.on('ended', () => { status.textContent = 'Ready'; btn.textContent = 'Call'; btn.classList.remove('hangup'); });
+        client.on('failed', (r) => { status.textContent = 'Error: ' + r; });
+
+        btn.onclick = () => {
+            if (client.inCall) { client.hangUp(); }
+            else { client.startCall(); btn.textContent = 'Hang Up'; btn.classList.add('hangup'); }
+        };
+    </script>
+</body>
+</html>

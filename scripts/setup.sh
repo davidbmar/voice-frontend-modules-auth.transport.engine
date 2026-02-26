@@ -41,6 +41,16 @@ echo "Installing STT/TTS runtime deps..."
 pip install faster-whisper piper-tts --quiet
 echo "  faster-whisper, piper-tts: installed"
 
+# 5b. Install optional Kokoro TTS (fails gracefully if onnxruntime unavailable)
+echo "Installing Kokoro TTS (optional)..."
+if pip install kokoro-onnx --quiet 2>/dev/null; then
+    echo "  kokoro-onnx: installed"
+    echo "  Note: download model files to ~/.cache/voice-frontend/kokoro/"
+    echo "    kokoro-v1.0.onnx + voices.bin from https://github.com/thewh1teagle/kokoro-onnx/releases"
+else
+    echo "  kokoro-onnx: skipped (install manually if needed)"
+fi
+
 # 6. Install server
 echo "Installing server..."
 pip install 'uvicorn[standard]' --quiet
@@ -89,3 +99,8 @@ echo "  source .venv/bin/activate"
 echo "  cd examples/minimal-voice-app"
 echo "  uvicorn server:app --port 8090"
 echo "  Open http://localhost:8090"
+echo
+echo "To run with admin panel + barge-in:"
+echo "  cd examples/with-admin"
+echo "  uvicorn server:app --port 8090"
+echo "  Open http://localhost:8090/admin"
