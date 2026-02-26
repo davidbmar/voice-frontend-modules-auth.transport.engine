@@ -2,9 +2,10 @@
 
 from transport.turn import TURNProvider, TwilioTURN, StaticICE
 from transport.signaling import SignalingServer
-from transport.session import WebRTCSession
+from transport.session import WebRTCSession, AudioChunk
 from transport.tunnel import CloudflareTunnel
 from transport.audio import AudioQueue, resample
+from transport.audio_source import WebRTCAudioSource
 
 __all__ = [
     "TURNProvider",
@@ -12,7 +13,9 @@ __all__ = [
     "StaticICE",
     "SignalingServer",
     "WebRTCSession",
+    "AudioChunk",
     "CloudflareTunnel",
     "AudioQueue",
     "resample",
+    "WebRTCAudioSource",
 ]

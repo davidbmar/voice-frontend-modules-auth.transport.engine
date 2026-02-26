@@ -6,6 +6,7 @@ For production, implement TTSProvider with ElevenLabs, Azure, etc.
 """
 
 import logging
+import os
 import urllib.request
 from pathlib import Path
 
@@ -17,7 +18,10 @@ from engine_starter.interfaces import TTSProvider
 log = logging.getLogger("engine_starter.tts")
 
 TARGET_RATE = 48000
-MODEL_DIR = Path(__file__).resolve().parent.parent.parent.parent / "models"
+MODEL_DIR = Path(os.environ.get(
+    "VOICE_MODELS_DIR",
+    Path.home() / ".cache" / "voice-frontend" / "models",
+))
 
 VOICE_CATALOG = [
     {"id": "en_US-lessac-medium", "name": "Lessac (US)", "lang": "en", "locale": "en_US", "voice_name": "lessac", "quality": "medium"},

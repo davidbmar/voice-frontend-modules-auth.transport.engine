@@ -15,7 +15,7 @@ log = logging.getLogger("engine_starter.llm")
 
 CLAUDE_HAIKU = "claude-haiku-4-5-20251001"
 CLAUDE_SONNET = "claude-sonnet-4-6"
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+_DEFAULT_OLLAMA_URL = "http://localhost:11434"
 
 _anthropic_client = None
 _openai_client = None
@@ -80,9 +80,10 @@ def _generate_openai(system: str, messages: list[dict]) -> str:
 def _generate_ollama(system: str, messages: list[dict], model: str = "") -> str:
     client = _get_httpx()
     active_model = model or os.getenv("OLLAMA_MODEL", "qwen3:8b")
+    ollama_url = os.getenv("OLLAMA_URL", _DEFAULT_OLLAMA_URL)
     ollama_messages = [{"role": "system", "content": system}] + messages
     resp = client.post(
-        f"{OLLAMA_URL}/api/chat",
+        f"{ollama_url}/api/chat",
         json={"model": active_model, "messages": ollama_messages, "stream": False},
     )
     resp.raise_for_status()
@@ -111,7 +112,7 @@ class StarterLLM(LLMProvider):
         self._system = system_prompt or "You are a helpful voice assistant. Keep responses concise and conversational."
 
     async def chat(self, messages: list[dict]) -> str:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         fn = functools.partial(
             _generate_sync, self._system, messages, self._provider, self._model
         )

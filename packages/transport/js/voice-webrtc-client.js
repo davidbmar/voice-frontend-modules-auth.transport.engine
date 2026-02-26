@@ -151,6 +151,8 @@ export class VoiceWebRTCClient {
 
         this._localStream.getTracks().forEach(t => this._pc.addTrack(t, this._localStream));
 
+        this._remoteAudio = null;
+
         this._pc.ontrack = (event) => {
             this._emit('log', 'Remote audio track received', 'info');
             const audio = document.createElement('audio');
@@ -158,6 +160,7 @@ export class VoiceWebRTCClient {
             audio.playsInline = true;
             audio.srcObject = event.streams[0] || new MediaStream([event.track]);
             document.body.appendChild(audio);
+            this._remoteAudio = audio;
         };
 
         this._pc.oniceconnectionstatechange = () => {
@@ -219,6 +222,11 @@ export class VoiceWebRTCClient {
 
     _cleanup() {
         this.inCall = false;
+        if (this._remoteAudio) {
+            this._remoteAudio.srcObject = null;
+            this._remoteAudio.remove();
+            this._remoteAudio = null;
+        }
         if (this._pc) { this._pc.close(); this._pc = null; }
         if (this._localStream) {
             this._localStream.getTracks().forEach(t => t.stop());

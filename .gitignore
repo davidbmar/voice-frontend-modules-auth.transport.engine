@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+.pytest_cache/
+models/
+*.onnx
+*.onnx.json
+.tunnel-config
+*.log

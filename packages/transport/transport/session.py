@@ -7,6 +7,7 @@ and provides high-level speak()/listen() APIs.
 import asyncio
 import logging
 import re
+from dataclasses import dataclass
 from typing import AsyncIterator
 
 import numpy as np
@@ -14,6 +15,14 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration, R
 
 from transport.audio import AudioQueue
 from transport.audio_source import WebRTCAudioSource, FRAME_SAMPLES, SAMPLE_RATE
+
+
+@dataclass
+class AudioChunk:
+    """A chunk of PCM audio data. Defined here to avoid cross-package imports."""
+    samples: bytes
+    sample_rate: int
+    channels: int
 
 log = logging.getLogger("transport.session")
 
@@ -40,7 +49,6 @@ class QueuedGenerator:
         self.queue = queue
 
     def next_chunk(self):
-        from engine_starter.interfaces import AudioChunk
         pcm = self.queue.read(FRAME_SAMPLES * 2)
         return AudioChunk(samples=pcm, sample_rate=SAMPLE_RATE, channels=1)
 
@@ -81,7 +89,7 @@ class WebRTCSession:
                 return
             log.info("Received remote audio track from browser mic")
             self._mic_track = track
-            self._mic_recv_task = asyncio.ensure_future(self._recv_mic_audio(track))
+            self._mic_recv_task = asyncio.create_task(self._recv_mic_audio(track))
 
     async def handle_offer(self, sdp: str) -> str:
         """Process browser SDP offer, return SDP answer."""
@@ -107,7 +115,7 @@ class WebRTCSession:
             return 0.0
 
         log.info("TTS: %d sentences to synthesize", len(sentences))
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         total_bytes = 0
 
         for sentence in sentences:
@@ -146,7 +154,7 @@ class WebRTCSession:
         speech_frames = 0
         silence_frames = 0
         in_speech = False
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         try:
             while self._recording:

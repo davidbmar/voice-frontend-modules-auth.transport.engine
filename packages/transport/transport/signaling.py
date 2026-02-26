@@ -71,7 +71,7 @@ class SignalingServer:
                         })
                         callback_result = self._on_session(session)
                         if asyncio.iscoroutine(callback_result):
-                            asyncio.ensure_future(callback_result)
+                            asyncio.create_task(callback_result)
                     except ImportError:
                         await websocket.send_json({
                             "type": "error",
