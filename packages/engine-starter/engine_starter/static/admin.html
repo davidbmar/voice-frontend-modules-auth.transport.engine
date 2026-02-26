@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — Voice Engine</title>
+    <style>
+        :root {
+            --bg-deep: #0f0f1e;
+            --bg-main: #1a1a2e;
+            --bg-card: #16213e;
+            --bg-hover: #1e2a4a;
+            --border: #2a2a4a;
+            --border-active: #4a6fa5;
+            --text: #e0e0e0;
+            --text-muted: #7a7a9a;
+            --text-dim: #555580;
+            --accent: #4caf50;
+            --accent-glow: rgba(76, 175, 80, 0.15);
+            --danger: #f44336;
+            --warning: #ff9800;
+            --blue: #64b5f6;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * { scrollbar-color: #2a2a4a #0f0f1e; scrollbar-width: thin; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-deep); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-active); }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(var(--border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--border) 1px, transparent 1px);
+            background-size: 60px 60px;
+            opacity: 0.08;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-main);
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(12px);
+        }
+
+        .topbar-left { display: flex; align-items: center; gap: 0.75rem; }
+
+        .topbar-badge {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--bg-deep);
+            background: var(--accent);
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+        }
+
+        .topbar-title { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+
+        .topbar a {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .topbar a:hover { color: var(--text); }
+
+        .page {
+            position: relative;
+            z-index: 1;
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem 4rem;
+        }
+
+        .section { margin-bottom: 2rem; }
+
+        .section-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; }
+
+        .section-label {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .section-line { flex: 1; height: 1px; background: var(--border); }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            transition: border-color 0.2s;
+        }
+        .card + .card { margin-top: 0.75rem; }
+
+        .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+        .toggle-info h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.25rem; }
+        .toggle-info p { font-size: 0.78rem; color: var(--text-muted); line-height: 1.4; max-width: 400px; }
+        .toggle { position: relative; width: 48px; height: 28px; flex-shrink: 0; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-track {
+            position: absolute; inset: 0;
+            background: var(--bg-deep); border: 1px solid var(--border); border-radius: 14px;
+            cursor: pointer; transition: background 0.3s, border-color 0.3s;
+        }
+        .toggle-track::after {
+            content: ''; position: absolute; top: 3px; left: 3px;
+            width: 20px; height: 20px; background: var(--text-muted);
+            border-radius: 50%; transition: transform 0.3s, background 0.3s;
+        }
+        .toggle input:checked + .toggle-track { background: var(--accent); border-color: var(--accent); }
+        .toggle input:checked + .toggle-track::after { transform: translateX(20px); background: #fff; }
+
+        .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 0.4rem; vertical-align: middle; }
+        .status-dot.on  { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+        .status-dot.off { background: var(--text-dim); }
+        .status-text { font-family: "SF Mono", Monaco, "Cascadia Code", monospace; font-size: 0.7rem; color: var(--text-muted); margin-top: 0.6rem; }
+
+        .engine-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+        .engine-tab {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.72rem; font-weight: 500; padding: 0.4rem 0.9rem; border-radius: 5px;
+            border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+            cursor: pointer; transition: all 0.2s;
+        }
+        .engine-tab:hover { border-color: var(--border-active); color: var(--text); }
+        .engine-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+        .voice-group { margin-bottom: 1rem; }
+        .voice-group:last-child { margin-bottom: 0; }
+        .voice-group-label {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.65rem; font-weight: 600; letter-spacing: 0.08em;
+            text-transform: uppercase; color: var(--text-dim); margin-bottom: 0.5rem; padding-left: 0.25rem;
+        }
+        .voice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.5rem; }
+        .voice-chip {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.72rem; padding: 0.5rem 0.7rem; border-radius: 6px;
+            border: 1px solid var(--border); background: var(--bg-deep); color: var(--text-muted);
+            cursor: pointer; transition: all 0.2s; text-align: center;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .voice-chip:hover { border-color: var(--border-active); color: var(--text); background: var(--bg-hover); }
+        .voice-chip.selected {
+            border-color: var(--accent); color: #fff;
+            background: rgba(76, 175, 80, 0.12); box-shadow: 0 0 0 1px var(--accent);
+        }
+
+        .toast {
+            position: fixed; bottom: 1.5rem; left: 50%;
+            transform: translateX(-50%) translateY(80px);
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.75rem; padding: 0.6rem 1.2rem; border-radius: 6px;
+            background: var(--bg-card); border: 1px solid var(--border); color: var(--text);
+            opacity: 0; transition: transform 0.3s ease, opacity 0.3s ease;
+            z-index: 100; pointer-events: none;
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        .toast.success { border-color: var(--accent); }
+        .toast.error   { border-color: var(--danger); }
+
+        .loading-shimmer {
+            background: linear-gradient(90deg, var(--bg-deep) 25%, var(--bg-hover) 50%, var(--bg-deep) 75%);
+            background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 4px; height: 32px;
+        }
+        @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+        .section { opacity: 0; transform: translateY(12px); animation: fadeUp 0.4s ease forwards; }
+        .section:nth-child(1) { animation-delay: 0.05s; }
+        .section:nth-child(2) { animation-delay: 0.15s; }
+        .section:nth-child(3) { animation-delay: 0.2s; }
+        .section:nth-child(4) { animation-delay: 0.25s; }
+        @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+        .preview-row { display: flex; gap: 0.5rem; align-items: stretch; }
+        .preview-input {
+            flex: 1; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 0.82rem; padding: 0.6rem 0.8rem; border-radius: 6px;
+            border: 1px solid var(--border); background: var(--bg-deep); color: var(--text);
+            outline: none; transition: border-color 0.2s; resize: none;
+        }
+        .preview-input:focus { border-color: var(--border-active); }
+        .preview-input::placeholder { color: var(--text-dim); }
+        .preview-btn {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.72rem; font-weight: 600; padding: 0.6rem 1rem; border-radius: 6px;
+            border: 1px solid var(--accent); background: rgba(76, 175, 80, 0.12); color: var(--accent);
+            cursor: pointer; transition: all 0.2s; white-space: nowrap;
+            display: flex; align-items: center; gap: 0.4rem;
+        }
+        .preview-btn:hover { background: rgba(76, 175, 80, 0.25); }
+        .preview-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .preview-btn.loading { border-color: var(--warning); color: var(--warning); }
+        .preview-audio { margin-top: 0.75rem; display: none; }
+        .preview-audio audio { width: 100%; height: 36px; border-radius: 6px; outline: none; }
+        .preview-voice-label {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.68rem; color: var(--text-dim); margin-top: 0.5rem;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; height: 4px;
+            background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: 2px solid var(--bg-deep);
+            box-shadow: 0 0 4px rgba(76,175,80,0.3);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 16px; height: 16px; border-radius: 50%;
+            background: var(--accent); cursor: pointer; border: 2px solid var(--bg-deep);
+        }
+
+        .banner {
+            font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+            font-size: 0.65rem; color: var(--text-dim); text-align: center;
+            padding: 0.5rem; border-bottom: 1px solid var(--border);
+            background: var(--bg-main); letter-spacing: 0.05em;
+        }
+    </style>
+</head>
+<body>
+    <div class="banner">Starter Engine &mdash; voice-frontend-engine-starter</div>
+
+    <div class="topbar">
+        <div class="topbar-left">
+            <span class="topbar-badge">Admin</span>
+            <span class="topbar-title">Voice Engine</span>
+        </div>
+        <a href="/">Back</a>
+    </div>
+
+    <div class="page">
+        <!-- Listening -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-label">Listening (Answering Questions)</span>
+                <div class="section-line"></div>
+            </div>
+            <div class="card">
+                <p style="margin:0 0 1rem; font-size:0.8rem; color:var(--text-dim);">Controls how the system recognises when the user starts and stops talking.</p>
+
+                <div style="margin-bottom:1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.3rem;">
+                        <label style="font-size:0.85rem;">Energy Threshold (RMS)</label>
+                        <span id="vad-threshold-val" style="font-family:monospace; font-size:0.85rem; color:var(--accent);">500</span>
+                    </div>
+                    <input type="range" id="vad-threshold" min="100" max="3000" step="50" value="500" style="width:100%;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-dim);">
+                        <span>Very sensitive (100)</span><span>Normal (500)</span><span>Loud only (3000)</span>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.3rem;">
+                        <label style="font-size:0.85rem;">Speech Confirm</label>
+                        <span id="vad-confirm-val" style="font-family:monospace; font-size:0.85rem; color:var(--accent);">200ms</span>
+                    </div>
+                    <input type="range" id="vad-confirm" min="1" max="10" step="1" value="2" style="width:100%;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-dim);">
+                        <span>Instant (100ms)</span><span>Quick (200ms)</span><span>Sentence (1s)</span>
+                    </div>
+                </div>
+
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.3rem;">
+                        <label style="font-size:0.85rem;">Silence Gap (end-of-speech)</label>
+                        <span id="vad-silence-val" style="font-family:monospace; font-size:0.85rem; color:var(--accent);">1.5s</span>
+                    </div>
+                    <input type="range" id="vad-silence" min="5" max="30" step="1" value="15" style="width:100%;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-dim);">
+                        <span>Quick (0.5s)</span><span>Normal (1.5s)</span><span>Patient (3s)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barge-in -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-label">Barge-in (Interrupting TTS)</span>
+                <div class="section-line"></div>
+            </div>
+            <div class="card">
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <h3>Barge-in Detection</h3>
+                        <p>Allow users to interrupt the bot mid-speech. Needs louder, sustained speech to avoid false triggers from echo.</p>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="barge-in-toggle" checked>
+                        <span class="toggle-track"></span>
+                    </label>
+                </div>
+                <div class="status-text">
+                    <span class="status-dot on" id="barge-in-dot"></span>
+                    <span id="barge-in-status">Enabled</span>
+                </div>
+
+                <div id="barge-in-settings" style="margin-top:1.2rem; border-top:1px solid var(--border); padding-top:1rem;">
+                    <div style="margin-bottom:1rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.3rem;">
+                            <label style="font-size:0.85rem;">Barge-in Threshold (RMS)</label>
+                            <span id="barge-threshold-val" style="font-family:monospace; font-size:0.85rem; color:var(--accent);">600</span>
+                        </div>
+                        <p style="font-size:0.72rem; color:var(--text-dim); margin:0 0 0.4rem; line-height:1.4;">
+                            How loud the caller must be to interrupt. Lower = more sensitive. 600&ndash;1000 works for most setups.
+                        </p>
+                        <input type="range" id="barge-threshold" min="300" max="5000" step="100" value="600" style="width:100%;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-dim);">
+                            <span>Sensitive (300)</span><span>Normal (800)</span><span>Loud only (5000)</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:0.3rem;">
+                            <label style="font-size:0.85rem;">Barge-in Confirm</label>
+                            <span id="barge-confirm-val" style="font-family:monospace; font-size:0.85rem; color:var(--accent);">200ms</span>
+                        </div>
+                        <p style="font-size:0.72rem; color:var(--text-dim); margin:0 0 0.4rem; line-height:1.4;">
+                            How many consecutive 100ms frames must exceed the threshold before interrupting.
+                        </p>
+                        <input type="range" id="barge-confirm" min="1" max="10" step="1" value="2" style="width:100%;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-dim);">
+                            <span>Instant (100ms)</span><span>Quick (300ms)</span><span>Cautious (1s)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Voice Selection -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-label">Voice Selection</span>
+                <div class="section-line"></div>
+            </div>
+            <div class="card" style="margin-bottom: 1rem;">
+                <div class="preview-row">
+                    <textarea class="preview-input" id="preview-text" rows="2"
+                        placeholder="Type text to preview...">Hello! I'm your voice assistant. How can I help you today?</textarea>
+                    <button class="preview-btn" id="preview-btn" onclick="previewVoice()">
+                        <span id="preview-btn-text">Play</span>
+                    </button>
+                </div>
+                <div class="preview-audio" id="preview-audio-wrap">
+                    <audio id="preview-audio" controls></audio>
+                </div>
+                <div class="preview-voice-label" id="preview-voice-label"></div>
+            </div>
+
+            <div class="engine-tabs" id="engine-tabs"></div>
+            <div class="card" id="voice-panel">
+                <div class="loading-shimmer" id="voice-loading"></div>
+                <div id="voice-list" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Current Config -->
+        <div class="section">
+            <div class="section-header">
+                <span class="section-label">Current Config</span>
+                <div class="section-line"></div>
+            </div>
+            <div class="card">
+                <pre id="config-display" style="
+                    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+                    font-size: 0.72rem; color: var(--text-muted);
+                    line-height: 1.6; white-space: pre-wrap; word-break: break-all;
+                ">Loading...</pre>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        'use strict';
+
+        var config = {};
+        var voices = {};
+        var activeEngine = '';
+        var availableEngines = [];
+
+        // Voice group labels for Kokoro voices (prefix -> display label)
+        var KOKORO_GROUPS = {
+            'af_': '\u{1F1FA}\u{1F1F8} US English \u2014 Female',
+            'am_': '\u{1F1FA}\u{1F1F8} US English \u2014 Male',
+            'bf_': '\u{1F1EC}\u{1F1E7} British \u2014 Female',
+            'bm_': '\u{1F1EC}\u{1F1E7} British \u2014 Male',
+            'ff_': '\u{1F1EB}\u{1F1F7} French',
+            'if_': '\u{1F1EE}\u{1F1F9} Italian \u2014 Female',
+            'im_': '\u{1F1EE}\u{1F1F9} Italian \u2014 Male',
+            'jf_': '\u{1F1EF}\u{1F1F5} Japanese \u2014 Female',
+            'jm_': '\u{1F1EF}\u{1F1F5} Japanese \u2014 Male',
+            'zf_': '\u{1F1E8}\u{1F1F3} Chinese \u2014 Female',
+            'zm_': '\u{1F1E8}\u{1F1F3} Chinese \u2014 Male'
+        };
+
+        // ── Auth (POST only) ────────────────────────
+        function getAdminToken() {
+            var token = localStorage.getItem('admin_api_key');
+            if (!token) {
+                token = prompt('Enter admin API key:');
+                if (token) localStorage.setItem('admin_api_key', token);
+            }
+            return token || '';
+        }
+
+        function adminFetch(url, opts) {
+            opts = opts || {};
+            opts.headers = opts.headers || {};
+            var token = getAdminToken();
+            if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+            return fetch(url, opts);
+        }
+
+        // ── Helpers ─────────────────────────────────
+        function showToast(msg, type) {
+            var el = document.getElementById('toast');
+            el.textContent = msg;
+            el.className = 'toast ' + (type || 'success') + ' show';
+            clearTimeout(el._timer);
+            el._timer = setTimeout(function() { el.classList.remove('show'); }, 2200);
+        }
+
+        function el(tag, attrs, text) {
+            var node = document.createElement(tag);
+            if (attrs) Object.keys(attrs).forEach(function(k) {
+                if (k === 'className') node.className = attrs[k];
+                else node.setAttribute(k, attrs[k]);
+            });
+            if (text) node.textContent = text;
+            return node;
+        }
+
+        // ── API (read = plain fetch, write = adminFetch) ──
+        function loadConfig() {
+            fetch('/api/config')
+                .then(function(r) { return r.json(); })
+                .then(function(data) { config = data; renderConfig(); })
+                .catch(function() { showToast('Failed to load config', 'error'); });
+        }
+
+        function updateConfig(patch) {
+            adminFetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patch)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { config = data; renderConfig(); showToast('Config updated'); })
+            .catch(function() { showToast('Update failed', 'error'); });
+        }
+
+        function loadVoices() {
+            fetch('/api/voices')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    voices = data;
+                    availableEngines = Object.keys(data).filter(function(k) { return data[k].length > 0; });
+                    buildEngineTabs();
+                    renderVoices();
+                })
+                .catch(function() {
+                    document.getElementById('voice-loading').style.display = 'none';
+                    var list = document.getElementById('voice-list');
+                    list.style.display = 'block';
+                    list.textContent = '';
+                    list.appendChild(el('p', { className: 'voice-group-label' },
+                        'Could not load voices. Check TTS provider installation.'));
+                });
+        }
+
+        // ── Engine tabs (built dynamically from available providers) ──
+        function buildEngineTabs() {
+            var container = document.getElementById('engine-tabs');
+            container.textContent = '';
+            availableEngines.forEach(function(engine) {
+                var tab = el('button', { className: 'engine-tab', 'data-engine': engine }, engine);
+                tab.addEventListener('click', function() {
+                    activeEngine = engine;
+                    document.querySelectorAll('.engine-tab').forEach(function(t) {
+                        t.classList.toggle('active', t.dataset.engine === engine);
+                    });
+                    updateConfig({ tts_engine: engine });
+                });
+                container.appendChild(tab);
+            });
+        }
+
+        // ── Render ──────────────────────────────────
+        function renderConfig() {
+            // Barge-in toggle
+            var toggle = document.getElementById('barge-in-toggle');
+            var dot = document.getElementById('barge-in-dot');
+            var statusText = document.getElementById('barge-in-status');
+            toggle.checked = config.barge_in_enabled;
+            dot.className = 'status-dot ' + (config.barge_in_enabled ? 'on' : 'off');
+            statusText.textContent = config.barge_in_enabled ? 'Enabled' : 'Disabled';
+
+            // Listening sliders
+            setSlider('vad-threshold', config.vad_energy_threshold || 500);
+            document.getElementById('vad-threshold-val').textContent = config.vad_energy_threshold || 500;
+            setSlider('vad-confirm', config.vad_speech_confirm_frames || 2);
+            document.getElementById('vad-confirm-val').textContent = ((config.vad_speech_confirm_frames || 2) * 100) + 'ms';
+            setSlider('vad-silence', config.vad_silence_gap || 15);
+            document.getElementById('vad-silence-val').textContent = ((config.vad_silence_gap || 15) * 0.1).toFixed(1) + 's';
+
+            // Barge-in sliders
+            setSlider('barge-threshold', config.barge_in_energy_threshold || 600);
+            document.getElementById('barge-threshold-val').textContent = config.barge_in_energy_threshold || 600;
+            setSlider('barge-confirm', config.barge_in_confirm_frames || 2);
+            document.getElementById('barge-confirm-val').textContent = ((config.barge_in_confirm_frames || 2) * 100) + 'ms';
+
+            // Grey out barge-in settings when disabled
+            var bargeSettings = document.getElementById('barge-in-settings');
+            bargeSettings.style.opacity = config.barge_in_enabled ? '1' : '0.35';
+            bargeSettings.style.pointerEvents = config.barge_in_enabled ? 'auto' : 'none';
+
+            // Engine tabs
+            activeEngine = config.tts_engine || availableEngines[0] || '';
+            document.querySelectorAll('.engine-tab').forEach(function(tab) {
+                tab.classList.toggle('active', tab.dataset.engine === activeEngine);
+            });
+
+            document.getElementById('config-display').textContent = JSON.stringify(config, null, 2);
+            renderVoices();
+        }
+
+        function setSlider(id, value) {
+            var slider = document.getElementById(id);
+            if (slider) slider.value = value;
+        }
+
+        function renderVoices() {
+            var loading = document.getElementById('voice-loading');
+            var list = document.getElementById('voice-list');
+            loading.style.display = 'none';
+            list.style.display = 'block';
+            list.textContent = '';
+
+            var currentVoice = config.tts_voice || '';
+            var currentEngine = config.tts_engine || activeEngine;
+            var voiceNames = voices[activeEngine] || [];
+
+            if (voiceNames.length === 0) {
+                list.appendChild(el('p', { className: 'voice-group-label' },
+                    'No voices found for ' + activeEngine + '.'));
+                return;
+            }
+
+            // Check if this engine uses Kokoro-style grouped voices
+            var isKokoroStyle = voiceNames.some(function(v) { return v.length >= 3 && KOKORO_GROUPS[v.substring(0, 3)]; });
+
+            if (isKokoroStyle) {
+                var groups = {};
+                voiceNames.forEach(function(v) {
+                    var prefix = v.substring(0, 3);
+                    var label = KOKORO_GROUPS[prefix] || 'Other';
+                    if (!groups[label]) groups[label] = [];
+                    groups[label].push(v);
+                });
+
+                Object.keys(groups).sort().forEach(function(label) {
+                    var groupDiv = el('div', { className: 'voice-group' });
+                    groupDiv.appendChild(el('div', { className: 'voice-group-label' }, label));
+                    var grid = el('div', { className: 'voice-grid' });
+                    groups[label].sort().forEach(function(v) {
+                        var isSelected = currentEngine === activeEngine && currentVoice === v;
+                        var displayName = v.replace(/^[a-z]{2}_/, '');
+                        var chip = el('div', {
+                            className: 'voice-chip' + (isSelected ? ' selected' : ''),
+                            'data-voice': v
+                        }, displayName);
+                        chip.addEventListener('click', function() {
+                            updateConfig({ tts_voice: v, tts_engine: activeEngine });
+                        });
+                        grid.appendChild(chip);
+                    });
+                    groupDiv.appendChild(grid);
+                    list.appendChild(groupDiv);
+                });
+            } else {
+                var grid = el('div', { className: 'voice-grid' });
+                voiceNames.sort().forEach(function(v) {
+                    var isSelected = currentEngine === activeEngine && currentVoice === v;
+                    var chip = el('div', {
+                        className: 'voice-chip' + (isSelected ? ' selected' : ''),
+                        'data-voice': v
+                    }, v);
+                    chip.addEventListener('click', function() {
+                        updateConfig({ tts_voice: v, tts_engine: activeEngine });
+                    });
+                    grid.appendChild(chip);
+                });
+                list.appendChild(grid);
+            }
+        }
+
+        // ── Voice preview ───────────────────────────
+        var previewAudioUrl = null;
+
+        function previewVoice() {
+            var text = document.getElementById('preview-text').value.trim();
+            if (!text) { showToast('Enter some text first', 'error'); return; }
+
+            var voice = config.tts_voice || '';
+            var engine = config.tts_engine || activeEngine;
+            var btn = document.getElementById('preview-btn');
+            var btnText = document.getElementById('preview-btn-text');
+
+            btn.disabled = true;
+            btn.classList.add('loading');
+            btnText.textContent = 'Generating...';
+
+            if (previewAudioUrl) { URL.revokeObjectURL(previewAudioUrl); previewAudioUrl = null; }
+
+            adminFetch('/api/tts/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text, voice: voice, engine: engine })
+            })
+            .then(function(r) {
+                if (!r.ok) return r.json().then(function(d) { throw new Error(d.detail || 'Preview failed'); });
+                return r.blob();
+            })
+            .then(function(blob) {
+                previewAudioUrl = URL.createObjectURL(blob);
+                var audioEl = document.getElementById('preview-audio');
+                audioEl.src = previewAudioUrl;
+                document.getElementById('preview-audio-wrap').style.display = 'block';
+                document.getElementById('preview-voice-label').textContent = engine + ' / ' + (voice || 'default');
+                audioEl.play();
+                showToast('Preview ready');
+            })
+            .catch(function(e) { showToast(e.message || 'Preview failed', 'error'); })
+            .finally(function() {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+                btnText.textContent = 'Play';
+            });
+        }
+
+        // ── Events ──────────────────────────────────
+        document.getElementById('barge-in-toggle').addEventListener('change', function(e) {
+            updateConfig({ barge_in_enabled: e.target.checked });
+        });
+
+        // Slider wiring: display value on input, save on change
+        function wireSlider(id, displayId, configKey, formatter) {
+            document.getElementById(id).addEventListener('input', function(e) {
+                document.getElementById(displayId).textContent = formatter(e.target.value);
+            });
+            document.getElementById(id).addEventListener('change', function(e) {
+                var patch = {};
+                patch[configKey] = parseInt(e.target.value);
+                updateConfig(patch);
+            });
+        }
+
+        wireSlider('vad-threshold', 'vad-threshold-val', 'vad_energy_threshold', function(v) { return v; });
+        wireSlider('vad-confirm', 'vad-confirm-val', 'vad_speech_confirm_frames', function(v) { return (v * 100) + 'ms'; });
+        wireSlider('vad-silence', 'vad-silence-val', 'vad_silence_gap', function(v) { return (v * 0.1).toFixed(1) + 's'; });
+        wireSlider('barge-threshold', 'barge-threshold-val', 'barge_in_energy_threshold', function(v) { return v; });
+        wireSlider('barge-confirm', 'barge-confirm-val', 'barge_in_confirm_frames', function(v) { return (v * 100) + 'ms'; });
+
+        // ── Init ────────────────────────────────────
+        loadConfig();
+        loadVoices();
+    </script>
+</body>
+</html>
