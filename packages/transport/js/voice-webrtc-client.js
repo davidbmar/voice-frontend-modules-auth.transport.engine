@@ -123,10 +123,31 @@ export class VoiceWebRTCClient {
         }
     }
 
+    _connectAndWaitReady() {
+        return new Promise((resolve, reject) => {
+            this._connectSignaling();
+            const timeout = setTimeout(() => reject(new Error('Signaling reconnect timeout')), 5000);
+            const origReady = this._listeners['ready'] || [];
+            const oneShot = () => {
+                clearTimeout(timeout);
+                // Remove this one-shot listener
+                this._listeners['ready'] = (this._listeners['ready'] || []).filter(f => f !== oneShot);
+                resolve();
+            };
+            this.on('ready', oneShot);
+        });
+    }
+
     // -- WebRTC ----------------------------------------------------
 
     async startCall() {
         if (this.inCall) return;
+
+        // Reconnect signaling if WebSocket was closed (e.g. after a previous call)
+        if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
+            this._emit('log', 'Reconnecting signaling...', 'info');
+            await this._connectAndWaitReady();
+        }
 
         try {
             this._localStream = await navigator.mediaDevices.getUserMedia({
@@ -190,6 +211,10 @@ export class VoiceWebRTCClient {
                     }
                 };
             });
+
+            if (!this._ws || this._ws.readyState !== WebSocket.OPEN) {
+                throw new Error('Signaling connection lost during ICE gathering');
+            }
 
             this._ws.send(JSON.stringify({
                 type: 'webrtc_offer',
