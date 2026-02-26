@@ -42,6 +42,7 @@ config = EngineConfig()
 tts_providers = {"piper": StarterTTS()}
 
 try:
+    import kokoro_onnx  # verify the runtime dependency is actually installed
     from engine_starter.kokoro_tts import KokoroTTS
     tts_providers["kokoro"] = KokoroTTS()
     config["tts_engine"] = "kokoro"  # default to kokoro if available
