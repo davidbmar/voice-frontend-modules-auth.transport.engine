@@ -75,6 +75,11 @@ class WebRTCSession:
         self.vad_silence_gap: int = 15
         self.vad_speech_confirm_frames: int = 2
 
+        # Barge-in settings (live-tunable)
+        self.barge_in_enabled: bool = True
+        self.barge_in_energy_threshold: int = 600
+        self.barge_in_confirm_frames: int = 2
+
         @self._pc.on("connectionstatechange")
         async def on_conn_state():
             log.info("Connection state: %s", self._pc.connectionState)
@@ -130,6 +135,89 @@ class WebRTCSession:
         duration = total_bytes / (SAMPLE_RATE * 2)
         log.info("TTS total: %d bytes, %.1fs playback", total_bytes, duration)
         return duration
+
+    @staticmethod
+    def _compute_rms(pcm_bytes: bytes) -> float:
+        """Compute RMS energy of int16 PCM audio."""
+        if not pcm_bytes:
+            return 0.0
+        samples = np.frombuffer(pcm_bytes, dtype=np.int16)
+        return float(np.sqrt(np.mean(samples.astype(np.float64) ** 2)))
+
+    async def speak_with_barge_in(
+        self, text: str, tts, stt=None
+    ) -> tuple[float, str | None]:
+        """Speak with barge-in detection — stops playback if user interrupts.
+
+        Returns (duration_played, transcribed_text | None).
+        If barge-in is disabled, behaves like regular speak().
+        """
+        if not self.barge_in_enabled:
+            dur = await self.speak(text, tts)
+            return dur, None
+
+        # Enqueue all TTS audio (reuses speak() logic)
+        self._audio_source.set_generator(self._tts_generator)
+        cleaned = self._clean_for_speech(text)
+        sentences = self._split_sentences(cleaned)
+        if not sentences:
+            return 0.0, None
+
+        loop = asyncio.get_running_loop()
+        total_bytes = 0
+        for sentence in sentences:
+            if asyncio.iscoroutinefunction(getattr(tts, 'synthesize', None)):
+                pcm = await tts.synthesize(sentence)
+            else:
+                pcm = await loop.run_in_executor(None, tts.synthesize, sentence)
+            if pcm:
+                self._audio_queue.enqueue(pcm)
+                total_bytes += len(pcm)
+
+        if total_bytes == 0:
+            return 0.0, None
+
+        total_duration = total_bytes / (SAMPLE_RATE * 2)
+        log.info("Barge-in TTS: %d bytes, %.1fs playback", total_bytes, total_duration)
+
+        # Enable recording and clear mic buffer for fresh barge-in detection
+        self._mic_frames.clear()
+        self._recording = True
+        consecutive_speech = 0
+        interrupted = False
+        elapsed = 0.0
+        poll_interval = 0.1
+
+        while self._audio_queue.is_playing:
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+
+            # Check recent mic frames for speech energy
+            recent = self._mic_frames[-5:] if len(self._mic_frames) >= 5 else self._mic_frames
+            if recent:
+                pcm_data = b"".join(recent)
+                rms = self._compute_rms(pcm_data)
+                if rms >= self.barge_in_energy_threshold:
+                    consecutive_speech += 1
+                    if consecutive_speech >= self.barge_in_confirm_frames:
+                        log.info("Barge-in detected at %.1fs (RMS=%.0f)", elapsed, rms)
+                        self.stop_speaking()
+                        interrupted = True
+                        break
+                else:
+                    consecutive_speech = 0
+
+        self._recording = False
+
+        if interrupted and stt and self._mic_frames:
+            captured = b"".join(self._mic_frames)
+            result = await loop.run_in_executor(
+                None, stt.transcribe, captured, SAMPLE_RATE
+            )
+            transcription = result.text if hasattr(result, 'text') else result[0]
+            return elapsed, transcription.strip() if transcription else None
+
+        return (elapsed if interrupted else total_duration), None
 
     async def listen(self, stt) -> AsyncIterator[str]:
         """Yield transcribed utterances using energy-based VAD + STT.

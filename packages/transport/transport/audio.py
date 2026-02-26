@@ -58,6 +58,11 @@ class AudioQueue:
                 written += to_copy
             return bytes(result)
 
+    @property
+    def is_playing(self) -> bool:
+        """True if there is audio queued for playback."""
+        return self.available > 0
+
     def clear(self):
         """Discard all queued audio."""
         with self._lock:
