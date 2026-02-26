@@ -323,6 +323,10 @@ class WebRTCSession:
                             text = result.text if hasattr(result, 'text') else result[0]
                             if text and text.strip():
                                 yield text.strip()
+                                # Re-enable recording after caller returns
+                                # (speak_with_barge_in sets _recording=False)
+                                self._mic_frames.clear()
+                                self._recording = True
         finally:
             self._recording = False
             log.info("Listening stopped")

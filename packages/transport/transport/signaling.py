@@ -6,7 +6,7 @@ Handles the hello -> ICE servers -> offer/answer -> call lifecycle.
 import asyncio
 import json
 import logging
-from typing import Callable, Awaitable
+from typing import Any, Callable, Awaitable
 
 from transport.turn import TURNProvider
 from transport.session import WebRTCSession
@@ -28,7 +28,7 @@ class SignalingServer:
     def __init__(
         self,
         turn_provider: TURNProvider,
-        on_session: Callable[[WebRTCSession], Awaitable[None] | None],
+        on_session: Callable[[WebRTCSession, Any], Awaitable[None] | None],
     ):
         self._turn_provider = turn_provider
         self._on_session = on_session
@@ -69,7 +69,7 @@ class SignalingServer:
                             "type": "webrtc_answer",
                             "sdp": answer_sdp,
                         })
-                        callback_result = self._on_session(session)
+                        callback_result = self._on_session(session, websocket)
                         if asyncio.iscoroutine(callback_result):
                             asyncio.create_task(callback_result)
                     except ImportError:

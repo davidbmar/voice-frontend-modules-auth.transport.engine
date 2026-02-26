@@ -88,6 +88,9 @@ export class VoiceWebRTCClient {
                     this._emit('log', 'Server error: ' + msg.message, 'error');
                     if (this.inCall) this._cleanup();
                     break;
+                case 'call_event':
+                    this._emit('call_event', msg);
+                    break;
                 case 'pong':
                     break;
                 default:
