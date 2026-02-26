@@ -17,7 +17,7 @@
     <p id="status">Connecting...</p>
     <button id="call-btn" disabled>Call</button>
     <script type="module">
-        import { VoiceWebRTCClient } from '../../packages/transport/js/voice-webrtc-client.js';
+        import { VoiceWebRTCClient } from '/js/voice-webrtc-client.js';
 
         const client = new VoiceWebRTCClient({ signalingUrl: '/ws' });
         const btn = document.getElementById('call-btn');

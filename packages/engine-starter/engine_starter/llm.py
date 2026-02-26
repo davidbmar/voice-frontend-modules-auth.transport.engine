@@ -79,7 +79,7 @@ def _generate_openai(system: str, messages: list[dict]) -> str:
 
 def _generate_ollama(system: str, messages: list[dict], model: str = "") -> str:
     client = _get_httpx()
-    active_model = model or os.getenv("OLLAMA_MODEL", "qwen3:8b")
+    active_model = model or os.getenv("OLLAMA_MODEL", "phi3:mini")
     ollama_url = os.getenv("OLLAMA_URL", _DEFAULT_OLLAMA_URL)
     ollama_messages = [{"role": "system", "content": system}] + messages
     resp = client.post(

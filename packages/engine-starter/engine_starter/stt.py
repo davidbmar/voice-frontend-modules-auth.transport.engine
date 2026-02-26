@@ -22,8 +22,8 @@ def _get_model():
 
     from faster_whisper import WhisperModel
 
-    log.info("Loading faster-whisper model: base (first run downloads ~75MB)...")
-    _model = WhisperModel("base", device="cpu", compute_type="int8")
+    log.info("Loading faster-whisper model: tiny (first run downloads ~39MB)...")
+    _model = WhisperModel("tiny", device="cpu", compute_type="int8")
     log.info("Whisper model loaded")
     return _model
 
@@ -45,7 +45,7 @@ class StarterSTT(STTProvider):
             num_output = int(len(samples) * 16000 / sample_rate)
             samples = scipy_resample(samples, num_output).astype(np.float32)
 
-        segments, info = model.transcribe(samples, beam_size=5, language="en")
+        segments, info = model.transcribe(samples, beam_size=1, language="en", vad_filter=True)
 
         text_parts = []
         worst_no_speech = 0.0
