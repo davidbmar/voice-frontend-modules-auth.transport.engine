@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "voice-frontend-transport"
+version = "0.1.0"
+description = "WebRTC transport: TURN credentials, signaling, session, tunnel, audio utilities"
+requires-python = ">=3.11"
+dependencies = [
+    "aiohttp>=3.9,<4",
+    "aiortc>=1.9,<2",
+    "av>=12.0,<13",
+    "numpy>=1.24,<2",
+    "fastapi>=0.110,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
