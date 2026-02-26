@@ -108,6 +108,8 @@ class WebRTCSession:
 
     async def _enqueue_tts(self, text: str, tts, voice: str = "") -> int:
         """Synthesize sentences and enqueue for playback. Returns total bytes."""
+        import time as _time
+
         self._audio_source.set_generator(self._tts_generator)
         cleaned = self._clean_for_speech(text)
         sentences = self._split_sentences(cleaned)
@@ -117,16 +119,26 @@ class WebRTCSession:
         log.info("TTS: %d sentences to synthesize", len(sentences))
         loop = asyncio.get_running_loop()
         total_bytes = 0
+        t_start = _time.perf_counter()
 
-        for sentence in sentences:
+        for i, sentence in enumerate(sentences):
+            t_sent = _time.perf_counter()
             if asyncio.iscoroutinefunction(getattr(tts, 'synthesize', None)):
                 pcm = await tts.synthesize(sentence, voice)
             else:
                 pcm = await loop.run_in_executor(None, tts.synthesize, sentence, voice)
+            elapsed_ms = (_time.perf_counter() - t_sent) * 1000
             if pcm:
                 self._audio_queue.enqueue(pcm)
                 total_bytes += len(pcm)
+                dur_ms = len(pcm) / (SAMPLE_RATE * 2) * 1000
+                log.info("TTS sentence %d: %dms synth -> %dms audio (%d bytes) %r",
+                         i + 1, elapsed_ms, dur_ms, len(pcm), sentence[:60])
+            else:
+                log.info("TTS sentence %d: %dms synth -> empty", i + 1, elapsed_ms)
 
+        total_ms = (_time.perf_counter() - t_start) * 1000
+        log.info("TTS total: %dms synth, %d bytes", total_ms, total_bytes)
         return total_bytes
 
     async def speak(self, text: str, tts, voice: str = "") -> float:
@@ -164,9 +176,10 @@ class WebRTCSession:
     ) -> tuple[float, str | None]:
         """Speak with barge-in detection — stops playback if user interrupts.
 
-        Enqueues all TTS audio, then monitors the mic for speech energy.
-        If consecutive frames exceed barge_in_energy_threshold, playback is
-        stopped immediately. Optionally transcribes the captured interruption.
+        Synthesis runs concurrently with playback: each sentence is enqueued
+        as soon as it's ready, so the first sentence plays while later ones
+        are still being synthesized. This eliminates the wait-for-all-sentences
+        delay before audio starts.
 
         Args:
             text: Text to speak.
@@ -182,12 +195,19 @@ class WebRTCSession:
             dur = await self.speak(text, tts, voice)
             return dur, None
 
-        total_bytes = await self._enqueue_tts(text, tts, voice)
-        if total_bytes == 0:
-            return 0.0, None
+        # Start synthesis in background — audio plays as sentences are enqueued
+        synth_task = asyncio.create_task(self._enqueue_tts(text, tts, voice))
 
-        total_duration = total_bytes / (SAMPLE_RATE * 2)
-        log.info("Barge-in TTS: %d bytes, %.1fs playback", total_bytes, total_duration)
+        # Wait briefly for the first sentence to be enqueued so playback begins
+        for _ in range(50):  # up to 5s
+            if self._audio_queue.is_playing or synth_task.done():
+                break
+            await asyncio.sleep(0.1)
+
+        if synth_task.done() and not self._audio_queue.is_playing:
+            # Nothing was synthesized
+            total_bytes = synth_task.result()
+            return 0.0, None
 
         # Safely reset mic buffer: disable recording, clear, then re-enable
         self._recording = False
@@ -200,7 +220,8 @@ class WebRTCSession:
         poll_interval = 0.1
         loop = asyncio.get_running_loop()
 
-        while self._audio_queue.is_playing:
+        # Loop while synthesis is still running OR audio is still playing
+        while not synth_task.done() or self._audio_queue.is_playing:
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
 
@@ -212,6 +233,7 @@ class WebRTCSession:
                     consecutive_speech += 1
                     if consecutive_speech >= self.barge_in_confirm_frames:
                         log.info("Barge-in detected at %.1fs (RMS=%.0f)", elapsed, rms)
+                        synth_task.cancel()  # stop synthesizing remaining sentences
                         self.stop_speaking()
                         interrupted = True
                         break
@@ -219,6 +241,17 @@ class WebRTCSession:
                     consecutive_speech = 0
 
         self._recording = False
+
+        # Get total bytes for duration calculation
+        if not synth_task.cancelled():
+            try:
+                total_bytes = await synth_task
+            except Exception:
+                total_bytes = 0
+        else:
+            total_bytes = 0
+
+        total_duration = total_bytes / (SAMPLE_RATE * 2) if total_bytes else elapsed
 
         if interrupted and stt and self._mic_frames:
             captured = b"".join(self._mic_frames)
