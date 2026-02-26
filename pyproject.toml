@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "voice-frontend"
+version = "0.1.0"
+description = "Shared voice WebRTC infrastructure — auth, transport, engine"
+requires-python = ">=3.11"
+dependencies = [
+    "voice-frontend-transport",
+    "voice-frontend-edge-auth",
+    "voice-frontend-engine-starter",
+]
+
+[project.optional-dependencies]
+all = [
+    "voice-frontend-transport",
+    "voice-frontend-edge-auth",
+    "voice-frontend-engine-starter",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+]
