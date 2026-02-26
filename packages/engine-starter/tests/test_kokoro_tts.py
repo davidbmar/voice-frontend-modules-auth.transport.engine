@@ -5,9 +5,10 @@ import importlib
 import pytest
 
 from engine_starter.interfaces import TTSProvider
-from engine_starter.kokoro_tts import KokoroTTS, VOICE_GROUPS, LANG_MAP
+from engine_starter.kokoro_tts import KokoroTTS, VOICE_GROUPS, LANG_MAP, MODEL_DIR
 
 _has_kokoro = importlib.util.find_spec("kokoro_onnx") is not None
+_has_models = (MODEL_DIR / "kokoro-v1.0.onnx").exists() and (MODEL_DIR / "voices.bin").exists()
 
 
 class TestKokoroTTS:
@@ -31,7 +32,7 @@ class TestKokoroTTS:
         assert "b" in LANG_MAP  # British English
         assert isinstance(LANG_MAP["a"], str)
 
-    @pytest.mark.skipif(not _has_kokoro, reason="kokoro-onnx not installed")
+    @pytest.mark.skipif(not _has_kokoro or not _has_models, reason="kokoro-onnx not installed or model files missing")
     def test_list_voices(self):
         tts = KokoroTTS()
         voices = tts.list_voices()

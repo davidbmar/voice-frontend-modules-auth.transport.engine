@@ -94,13 +94,11 @@ python -m pytest packages/transport/tests packages/edge-auth/tests packages/engi
 echo
 echo "=== Setup complete ==="
 echo
-echo "To run the minimal example:"
+echo "To run:"
 echo "  source .venv/bin/activate"
-echo "  cd examples/minimal-voice-app"
-echo "  uvicorn server:app --port 8090"
-echo "  Open http://localhost:8090"
+echo "  ./scripts/run.sh                # Interactive mode selection"
+echo "  ./scripts/run.sh --local        # Local (localhost only)"
+echo "  ./scripts/run.sh --lan          # LAN (phone on same WiFi)"
+echo "  ./scripts/run.sh --tunnel       # Cellular (Cloudflare Tunnel)"
+echo "  ./scripts/run.sh --check        # Validate config only"
 echo
-echo "To run with admin panel + barge-in:"
-echo "  cd examples/with-admin"
-echo "  uvicorn server:app --port 8090"
-echo "  Open http://localhost:8090/admin"

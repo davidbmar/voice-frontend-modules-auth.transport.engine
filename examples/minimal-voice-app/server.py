@@ -71,6 +71,11 @@ async def ws_endpoint(websocket: WebSocket):
     await signaling.handle(websocket)
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 @app.get("/")
 async def index():
     return FileResponse("index.html")

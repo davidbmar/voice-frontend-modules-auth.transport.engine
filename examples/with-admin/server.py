@@ -43,7 +43,9 @@ tts_providers = {"piper": StarterTTS()}
 
 try:
     import kokoro_onnx  # verify the runtime dependency is actually installed
-    from engine_starter.kokoro_tts import KokoroTTS
+    from engine_starter.kokoro_tts import KokoroTTS, MODEL_DIR
+    if not (MODEL_DIR / "kokoro-v1.0.onnx").exists():
+        raise FileNotFoundError(f"Kokoro model files not found in {MODEL_DIR}")
     tts_providers["kokoro"] = KokoroTTS()
     config["tts_engine"] = "kokoro"  # default to kokoro if available
     log.info("Kokoro TTS loaded — set as default engine")
@@ -86,35 +88,58 @@ def _get_tts():
     return provider, voice
 
 
-async def handle_call(session: WebRTCSession):
+async def send_event(ws, event, **data):
+    """Push a call_event to the browser over the signaling WebSocket."""
+    try:
+        await ws.send_json({"type": "call_event", "event": event, **data})
+    except Exception:
+        pass  # WebSocket may have closed
+
+
+async def handle_call(session: WebRTCSession, ws):
     _apply_config(session)
     tts, voice = _get_tts()
 
+    greeting = "Hi! How can I help?"
+    await send_event(ws, "assistant_start", text=greeting)
     t0 = time.perf_counter()
     dur, interruption = await session.speak_with_barge_in(
-        "Hi! How can I help?", tts, voice=voice
+        greeting, tts, voice=voice
     )
-    log.info("TIMING greeting: %.2fs (interrupted: %s)", time.perf_counter() - t0, interruption is not None)
+    greeting_ms = round((time.perf_counter() - t0) * 1000)
+    await send_event(ws, "assistant_done", duration_ms=greeting_ms, interrupted=interruption is not None)
+    log.info("TIMING greeting: %.2fs (interrupted: %s)", greeting_ms / 1000, interruption is not None)
+
+    await send_event(ws, "listening")
 
     async for utterance in session.listen(stt):
         # Re-apply config each turn (admin panel changes take effect here)
         _apply_config(session)
         tts, voice = _get_tts()
 
+        await send_event(ws, "user_message", text=utterance)
         log.info("Heard: %r", utterance)
-        t1 = time.perf_counter()
 
+        await send_event(ws, "llm_thinking")
+        t1 = time.perf_counter()
         response = await llm.chat([
             {"role": "system", "content": "You are a helpful voice assistant. Keep responses brief."},
             {"role": "user", "content": utterance},
         ])
-        log.info("TIMING LLM: %.2fs", time.perf_counter() - t1)
+        llm_ms = round((time.perf_counter() - t1) * 1000)
+        await send_event(ws, "llm_done", text=response, duration_ms=llm_ms)
+        log.info("TIMING LLM: %.2fs", llm_ms / 1000)
 
+        await send_event(ws, "assistant_start", text=response)
         t_tts = time.perf_counter()
         dur, interruption = await session.speak_with_barge_in(
             response, tts, voice=voice, stt=stt
         )
-        log.info("TIMING TTS: %.2fs (barge-in: %s)", time.perf_counter() - t_tts, interruption is not None)
+        tts_ms = round((time.perf_counter() - t_tts) * 1000)
+        await send_event(ws, "assistant_done", duration_ms=tts_ms, interrupted=interruption is not None)
+        log.info("TIMING TTS: %.2fs (barge-in: %s)", tts_ms / 1000, interruption is not None)
+
+        await send_event(ws, "listening")
 
 
 signaling = SignalingServer(turn_provider=turn, on_session=handle_call)
@@ -123,6 +148,11 @@ signaling = SignalingServer(turn_provider=turn, on_session=handle_call)
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
     await signaling.handle(websocket)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 
 @app.get("/")
